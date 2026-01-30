@@ -9,15 +9,27 @@
         body {
             margin: 0;
             overflow: hidden;
-            background-color: #1a1a2e;
+            background-color: #0d0d15; /* Fundo escuro fora do jogo */
             font-family: 'Press Start 2P', cursive;
             user-select: none;
             image-rendering: pixelated;
+            
+            /* Centralizar o jogo */
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
         }
 
         canvas {
             display: block;
             image-rendering: pixelated;
+            box-shadow: 0 0 50px rgba(0,0,0,0.5); /* Sombra para destacar a janela */
+            border: 2px solid #2c3e50;
+            
+            /* Garante que o jogo caiba na tela se a janela for muito pequena */
+            max-width: 100%;
+            max-height: 100%;
         }
 
         #game-ui {
@@ -38,8 +50,9 @@ const ctx = canvas.getContext('2d');
 
 ctx.imageSmoothingEnabled = false;
 
-canvas.width = window.innerWidth;
-canvas.height = window.innerHeight;
+// Tamanho fixo da janela do jogo (HD 720p)
+canvas.width = 1280;
+canvas.height = 720;
 
 // ESTADOS DO JOGO
 const STATE_MENU = 0;
@@ -981,10 +994,15 @@ window.addEventListener('keyup', e => {
 });
 
 window.addEventListener('mousemove', e => {
-    mouse.mapX = e.clientX + camera.x;
-    mouse.mapY = e.clientY + camera.y;
-    mouse.x = e.clientX;
-    mouse.y = e.clientY;
+    const rect = canvas.getBoundingClientRect();
+    const scaleX = canvas.width / rect.width;
+    const scaleY = canvas.height / rect.height;
+    
+    mouse.x = (e.clientX - rect.left) * scaleX;
+    mouse.y = (e.clientY - rect.top) * scaleY;
+    
+    mouse.mapX = mouse.x + camera.x;
+    mouse.mapY = mouse.y + camera.y;
 });
 
 window.addEventListener('mousedown', () => {
@@ -996,10 +1014,8 @@ window.addEventListener('mousedown', () => {
 });
 
 window.addEventListener('resize', () => {
-    canvas.width = window.innerWidth;
-    canvas.height = window.innerHeight;
-    camera.width = canvas.width;
-    camera.height = canvas.height;
+    // Redimensionamento visual é tratado pelo CSS, o canvas interno é fixo
+    // Atualiza a câmera se necessário, mas como o tamanho interno é fixo, não precisa
 });
 
 initMenu();
