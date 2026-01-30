@@ -3,13 +3,14 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Floresta Fantasma - Top Down</title>
+    <title>Aventura da Ladra</title>
+    <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
     <style>
         body {
             margin: 0;
             overflow: hidden;
-            background-color: #1a1a2e; /* Fundo escuro fora do mapa */
-            font-family: 'Courier New', Courier, monospace;
+            background-color: #1a1a2e;
+            font-family: 'Press Start 2P', cursive;
             user-select: none;
             image-rendering: pixelated;
         }
@@ -20,54 +21,11 @@
         }
 
         #game-ui {
-            position: absolute;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            color: white;
-            text-align: center;
-            pointer-events: none;
             display: none;
-            text-shadow: 4px 4px 0px #000;
-            z-index: 10;
-        }
-
-        h1 {
-            font-size: 4rem;
-            margin-bottom: 20px;
-            font-weight: bold;
-            letter-spacing: -2px;
-        }
-
-        p {
-            font-size: 1.5rem;
-            color: #f1c40f;
-        }
-
-        .instruction {
-            position: absolute;
-            bottom: 20px;
-            left: 20px;
-            color: white;
-            font-size: 14px;
-            pointer-events: none;
-            text-shadow: 2px 2px 0 #000;
-            background: rgba(0,0,0,0.5);
-            padding: 10px;
-            border-radius: 4px;
         }
     </style>
 </head>
 <body>
-
-    <div id="game-ui">
-        <h1 id="ui-title">GAME OVER</h1>
-        <p id="ui-subtitle">PRESSIONE ESPAÇO</p>
-    </div>
-
-    <div class="instruction">
-        WASD: Mover • MOUSE: Mirar • CLIQUE: Atacar
-    </div>
 
     <canvas id="gameCanvas"></canvas>
 
@@ -77,103 +35,107 @@
  */
 const canvas = document.getElementById('gameCanvas');
 const ctx = canvas.getContext('2d');
-const uiElement = document.getElementById('game-ui');
-const uiTitle = document.getElementById('ui-title');
 
 ctx.imageSmoothingEnabled = false;
 
 canvas.width = window.innerWidth;
 canvas.height = window.innerHeight;
 
+// ESTADOS DO JOGO
+const STATE_MENU = 0;
+const STATE_PLAYING = 1;
+const STATE_GAMEOVER = 2;
+const STATE_ITEM_GET = 3;
+const STATE_FALLING = 4;
+const STATE_OPENING_DOOR = 5; // Nova animação de porta
+let gameState = STATE_MENU;
+
 let animationId;
 let score = 0;
-let isGameOver = false;
 let globalFrame = 0;
+let currentLevel = 1;
+let doorAnimationTimer = 0;
 
 // Inputs
 const mouse = { x: canvas.width / 2, y: canvas.height / 2, mapX: 0, mapY: 0, down: false };
 const keys = { w: false, a: false, s: false, d: false, " ": false };
 
 // Configurações do Mapa
-const TILE_SIZE = 64; // Tamanho de cada quadrado do mapa
-const MAP_DATA = [
-    "aaaaaaaaaaaaaaaaa",
-    "aaaaaaccGccaaaaaa",
-    "aaaaaaacccaaaaaaa",
-    "aaaaaaacccaaaaaaa",
-    "aaaaaaacccaaaaaaa",
-    "aaaaaaacccaaaaaaa",
-    "aaaaaaacccaaaaaaa",
-    "aaaaaaacccaaaaaaa",
-    "aaaaaaacccaaaaaaa",
-    "aaaaaaacccaaaaaaa",
-    "aaaaaaccSccaaaaaa",
-    "aaaaaaacccaaaaaaa",
-    "aaaaaaacccaaaaaaa",
-    "aaaaaaacccaaaaaaa",
-    "aaaaaaacccaaaaaaa",
-    "aaaaaaacccaaaaaaa",
-    "aaaaaaacccaaaaaaa",
-    "aaaaaaacccaaaaaaa",
-    "aaaaaaacccaaaaaaa",
-    "aaaaaaacPcaaaaaaa",
-    "aaaaaaacccaaaaaaa",
-    "aaaaaaaaaaaaaaaaa"
+const TILE_SIZE = 64;
+
+// Mapa Fase 1
+const PADDING_LEFT = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"; 
+const RAW_MAP_DATA_LEVEL_1 = [
+    "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "aaaaaaaccccccaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "aaaaaccccccccccaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "aaaaccccccccccccaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "aaaccccccccccccccaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "aaacccccccccccccccScccGcccccScccccGcccccScccccGcccccScccccGcccccScccccccccccaaaaaaaaa", 
+    "aaacccccccBcccccccGcccScccccGcccccScccccGcccccScccccGcccccScccccGcccccccccccaaaaaaaaa", // Boss
+    "aaacccccccccccccccScccGcccccScccccGcccccScccccGcccccScccccGcccccScccccccccccaaaaaaaaa", // Player removido daqui
+    "aaaccccccccccccccaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaacccaaaaaaaaaaa",
+    "aaaaccccccccccccaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaacccaaaaaaaaaaa",
+    "aaaaaccccccccccaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaacccaaaaaaaaaaa",
+    "aaaaaaaccccccaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaacccaaaaaaaaaaa", 
+    "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaacccaaaaaaaaaaa",
+    "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaacccaaaaaaaaaaa",
+    "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaacccaaaaaaaaaaa",
+    "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaacccaaaaaaaaaaa",
+    "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaacccaaaaaaaaaaa",
+    "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaacccaaaaaaaaaaa",
+    "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaacccaaaaaaaaaaa",
+    "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaacSccaaaaaaaaaa",
+    "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaacccaaaaaaaaaaa",
+    "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaacccaaaaaaaaaaa",
+    "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaacccaaaaaaaaaaa",
+    "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaacccaaaaaaaaaaa",
+    "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaacccaaaaaaaaaaa",
+    "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaacccaaaaaaaaaaa",
+    "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaacccaaaaaaaaaaa",
+    "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaacccaaaaaaaaaaa",
+    "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaacPcaaaaaaaaaaa", // Player começa aqui agora
+    "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaacccaaaaaaaaaaa",
+    "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
 ];
 
-let mapWidth = MAP_DATA[0].length * TILE_SIZE;
-let mapHeight = MAP_DATA.length * TILE_SIZE;
+// Mapa Fase 2: Castelo Abandonado (Expandido)
+// w = parede, f = chão, D = Porta Fechada, d = Porta Aberta (lógica), P = Spawn
+// C = Cama, A = Armário, M = Mesa Cabeceira
+// K = Armadura (Knight), L = Mesa Longa, O = Cadeira Velha
+const FULL_MAP_DATA_LEVEL_2 = [
+    "aaaaaaaaaaaaaaaaaaaa",
+    "aaaaaaaaaaaaaaaaaaaa",
+    "aaaaaaawwwwwwwaaaaaa",
+    "aaaaaaawffKffwaaaaaa", // Final do corredor
+    "aaaaaaawfOfOfwaaaaaa",
+    "aaaaaaawffLffwaaaaaa",
+    "aaaaaaawfffffwaaaaaa",
+    "aaaaaaawKfffKwaaaaaa",
+    "aaaaaaawfffffwaaaaaa",
+    "aaaaaaawfOfOfwaaaaaa",
+    "aaaaaaawffLffwaaaaaa",
+    "aaaaaaawfffffwaaaaaa",
+    "aaaaaaawKfffKwaaaaaa", // Corredor longo com armaduras
+    "aaaaaaawfffffwaaaaaa", // Linha 13 (Chão antes da porta)
+    "aaaaaaawwwDwwwaaaaaa", // Porta do Quarto (Linha 14)
+    "aaaaaaawfffffwaaaaaa",
+    "aaaaaaawAffMfwaaaaaa",
+    "aaaaaaawfffffwaaaaaa",
+    "aaaaaaawffPffwaaaaaa", // Player cai aqui
+    "aaaaaaawCffffwaaaaaa",
+    "aaaaaaawCffffwaaaaaa", 
+    "aaaaaaawwwwwwwaaaaaa",
+    "aaaaaaaaaaaaaaaaaaaa",
+    "aaaaaaaaaaaaaaaaaaaa"
+];
+
+let levelMap = []; 
+let mapWidth = 0;
+let mapHeight = 0;
 
 // Câmera
-const camera = {
-    x: 0,
-    y: 0,
-    width: canvas.width,
-    height: canvas.height
-};
-
-/**
- * SISTEMA DE CLIMA (Névoa e Escuridão)
- */
-class FogSystem {
-    constructor() {
-        this.clouds = [];
-        // Criar várias nuvens iniciais espalhadas pelo mapa
-        for (let i = 0; i < 40; i++) {
-            this.clouds.push(this.createCloud(Math.random() * mapWidth));
-        }
-    }
-
-    createCloud(startX) {
-        return {
-            x: startX,
-            y: Math.random() * mapHeight,
-            width: 150 + Math.random() * 250, // Nuvens largas
-            height: 80 + Math.random() * 120,
-            speed: 0.3 + Math.random() * 0.5, // Movimento lento
-            alpha: 0.05 + Math.random() * 0.10 // Transparência bem sutil
-        };
-    }
-
-    update() {
-        this.clouds.forEach(cloud => {
-            cloud.x += cloud.speed;
-            // Se sair do mapa pela direita, volta para a esquerda
-            if (cloud.x > mapWidth) {
-                Object.assign(cloud, this.createCloud(-300));
-            }
-        });
-    }
-
-    draw(ctx) {
-        this.clouds.forEach(cloud => {
-            ctx.globalAlpha = cloud.alpha;
-            ctx.fillStyle = '#ecf0f1'; // Cor da névoa (branco gelo)
-            ctx.fillRect(cloud.x, cloud.y, cloud.width, cloud.height);
-        });
-        ctx.globalAlpha = 1.0; // Resetar opacidade
-    }
-}
+const camera = { x: 0, y: 0, width: canvas.width, height: canvas.height };
 
 /**
  * UTILITÁRIOS
@@ -183,328 +145,335 @@ function drawPixelRect(x, y, w, h, color) {
     ctx.fillRect(Math.floor(x), Math.floor(y), w, h);
 }
 
-// Verifica colisão com paredes do mapa
+function shadeColor(color, percent) {
+    let f=parseInt(color.slice(1),16),t=percent<0?0:255,p=percent<0?percent*-1:percent,R=f>>16,G=f>>8&0x00FF,B=f&0x0000FF;
+    return "#"+(0x1000000+(Math.round((t-R)*p)+R)*0x10000+(Math.round((t-G)*p)+G)*0x100+(Math.round((t-B)*p)+B)).toString(16).slice(1);
+}
+
 function isWalkable(x, y) {
     const col = Math.floor(x / TILE_SIZE);
     const row = Math.floor(y / TILE_SIZE);
-
-    // Fora dos limites do mapa é parede
-    if (row < 0 || row >= MAP_DATA.length || col < 0 || col >= MAP_DATA[0].length) {
-        return false;
-    }
-
-    const tile = MAP_DATA[row][col];
-    // 'a' é arvore (bloqueia), resto anda
-    return tile !== 'a';
+    if (row < 0 || row >= levelMap.length || col < 0 || col >= levelMap[0].length) return false;
+    const tile = levelMap[row][col];
+    // Nível 1: 'a', 'X' bloqueiam
+    // Nível 2: Objetos bloqueiam. 'D' (porta fechada) bloqueia. 'd' (porta aberta) passa.
+    if (tile === 'a' || tile === 'X') return false;
+    if (tile === 'w' || tile === 'C' || tile === 'A' || tile === 'M' || tile === 'D' || tile === 'K' || tile === 'L' || tile === 'O') return false;
+    return true; 
 }
 
-// Verifica colisão de círculo contra tiles
 function checkMapCollision(x, y, radius) {
-    // Verifica 4 pontos ao redor do círculo para impedir atravessar paredes
-    const points = [
-        {x: x - radius * 0.5, y: y}, // Esquerda
-        {x: x + radius * 0.5, y: y}, // Direita
-        {x: x, y: y - radius * 0.5}, // Cima
-        {x: x, y: y + radius * 0.5}  // Baixo
-    ];
-
-    for (let p of points) {
-        if (!isWalkable(p.x, p.y)) return true;
-    }
+    const points = [ {x: x - radius * 0.5, y: y}, {x: x + radius * 0.5, y: y}, {x: x, y: y - radius * 0.5}, {x: x, y: y + radius * 0.5} ];
+    for (let p of points) { if (!isWalkable(p.x, p.y)) return true; }
     return false;
 }
 
 /**
  * CLASSES
  */
-
 class Particle {
-    constructor(x, y, color, velocity) {
-        this.x = x;
-        this.y = y;
-        this.color = color;
-        this.velocity = velocity;
-        this.life = 1.0;
-        this.size = Math.random() * 4 + 2;
+    constructor(x, y, color, velocity, size = null) {
+        this.x = x; this.y = y; this.color = color; this.velocity = velocity; this.life = 1.0; this.size = size || (Math.random() * 4 + 2);
     }
+    draw() { ctx.globalAlpha = this.life; drawPixelRect(this.x, this.y, this.size, this.size, this.color); ctx.globalAlpha = 1.0; }
+    update() { this.velocity.x *= 0.9; this.velocity.y *= 0.9; this.x += this.velocity.x; this.y += this.velocity.y; this.life -= 0.05; }
+}
 
+class HeartItem {
+    constructor(x, y) { this.x = x; this.y = y; this.active = true; this.type = 'HEART'; this.bobOffset = Math.random() * 100; this.radius = 15; }
     draw() {
-        ctx.globalAlpha = this.life;
-        drawPixelRect(this.x, this.y, this.size, this.size, this.color);
-        ctx.globalAlpha = 1.0;
-    }
-
-    update() {
-        this.velocity.x *= 0.9;
-        this.velocity.y *= 0.9;
-        this.x += this.velocity.x;
-        this.y += this.velocity.y;
-        this.life -= 0.05;
+        const bob = Math.sin((globalFrame + this.bobOffset) * 0.1) * 3; const y = this.y + bob;
+        ctx.fillStyle = 'rgba(0,0,0,0.2)'; ctx.beginPath(); ctx.ellipse(this.x, this.y + 10, 8, 4, 0, 0, Math.PI * 2); ctx.fill();
+        const s = 2; const c = '#e74c3c';
+        drawPixelRect(this.x - 2*s, y - 2*s, 1*s, 1*s, c); drawPixelRect(this.x + 2*s, y - 2*s, 1*s, 1*s, c);
+        drawPixelRect(this.x - 3*s, y - 1*s, 7*s, 2*s, c); drawPixelRect(this.x - 2*s, y + 1*s, 5*s, 1*s, c);
+        drawPixelRect(this.x - 1*s, y + 2*s, 3*s, 1*s, c); drawPixelRect(this.x, y + 3*s, 1*s, 1*s, c);
+        drawPixelRect(this.x - 2*s, y - 1*s, 1*s, 1*s, '#ffffff');
     }
 }
 
+class KeyItem {
+    constructor(x, y) { this.x = x; this.y = y; this.active = true; this.type = 'KEY'; this.radius = 20; }
+    draw() {
+        const bob = Math.sin(globalFrame * 0.1) * 5; const y = this.y + bob;
+        ctx.globalAlpha = 0.5 + Math.sin(globalFrame * 0.1) * 0.2; ctx.fillStyle = '#f1c40f'; ctx.beginPath(); ctx.ellipse(this.x, this.y + 15, 15, 8, 0, 0, Math.PI*2); ctx.fill(); ctx.globalAlpha = 1.0;
+        const c = '#f1c40f';
+        drawPixelRect(this.x - 6, y - 10, 12, 12, c); drawPixelRect(this.x - 2, y - 6, 4, 4, '#1a1a2e');
+        drawPixelRect(this.x - 2, y + 2, 4, 16, c); drawPixelRect(this.x + 2, y + 10, 6, 4, c); drawPixelRect(this.x + 2, y + 16, 4, 4, c);
+    }
+}
+
+class Projectile {
+    constructor(x, y, targetX, targetY) { this.x = x; this.y = y; this.radius = 8; this.color = '#9b59b6'; this.speed = 5; const angle = Math.atan2(targetY - y, targetX - x); this.vx = Math.cos(angle) * this.speed; this.vy = Math.sin(angle) * this.speed; this.active = true; }
+    update() { this.x += this.vx; this.y += this.vy; if (!isWalkable(this.x, this.y)) { this.active = false; createExplosion(this.x, this.y, this.color); } }
+    draw() { ctx.fillStyle = this.color; drawPixelRect(this.x - 4, this.y - 4, 8, 8, this.color); drawPixelRect(this.x - 2, this.y - 6, 4, 12, '#8e44ad'); drawPixelRect(this.x - 6, this.y - 2, 12, 4, '#8e44ad'); }
+}
+
+class FogSystem {
+    constructor() { this.clouds = []; for (let i = 0; i < 40; i++) this.clouds.push(this.createCloud(Math.random() * mapWidth)); }
+    createCloud(startX) { return { x: startX, y: Math.random() * mapHeight, width: 150 + Math.random() * 250, height: 80 + Math.random() * 120, speed: 0.3 + Math.random() * 0.5, alpha: 0.05 + Math.random() * 0.10 }; }
+    update() { this.clouds.forEach(cloud => { cloud.x += cloud.speed; if (cloud.x > mapWidth) Object.assign(cloud, this.createCloud(-300)); }); }
+    draw(ctx) { this.clouds.forEach(cloud => { ctx.globalAlpha = cloud.alpha; ctx.fillStyle = '#ecf0f1'; ctx.fillRect(cloud.x, cloud.y, cloud.width, cloud.height); }); ctx.globalAlpha = 1.0; }
+}
+
+function draw3DBlock(x, y, w, h, depth, color) {
+    const cFront = color; const cTop = shadeColor(color, 0.2); const cSide = shadeColor(color, -0.2); const dX = depth * 0.5; const dY = depth * 0.5;
+    ctx.fillStyle = cFront; ctx.fillRect(x, y, w, h);
+    ctx.fillStyle = cTop; ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x + dX, y - dY); ctx.lineTo(x + w + dX, y - dY); ctx.lineTo(x + w, y); ctx.fill();
+    ctx.fillStyle = cSide; ctx.beginPath(); ctx.moveTo(x + w, y); ctx.lineTo(x + w + dX, y - dY); ctx.lineTo(x + w + dX, y + h - dY); ctx.lineTo(x + w, y + h); ctx.fill();
+    ctx.strokeStyle = 'rgba(0,0,0,0.2)'; ctx.lineWidth = 1; ctx.strokeRect(x, y, w, h);
+}
+
+class MenuSmoke { constructor(x, y) { this.x = x; this.y = y; this.vy = -0.5 - Math.random() * 0.5; this.vx = (Math.random() - 0.5) * 0.5; this.life = 1.0; this.size = 4 + Math.random() * 4; } update() { this.x += this.vx; this.y += this.vy; this.life -= 0.01; this.size += 0.05; } draw() { ctx.globalAlpha = this.life * 0.6; drawPixelRect(this.x, this.y, this.size, this.size, '#bdc3c7'); ctx.globalAlpha = 1.0; } }
+class Cart { constructor(centerX, startY, endY) { this.centerX = centerX; this.startY = startY; this.endY = endY; this.direction = Math.random() < 0.5 ? 1 : -1; this.progress = this.direction === 1 ? 0 : 1; this.speed = 0.003 + Math.random() * 0.003; this.active = true; this.color = Math.random() < 0.5 ? '#8d6e63' : '#6d4c41'; } update() { if (this.direction === 1) { this.progress += this.speed; if (this.progress > 1) this.active = false; } else { this.progress -= this.speed; if (this.progress < 0) this.active = false; } } draw() { const currentY = this.startY - (this.startY - this.endY) * this.progress; const scale = 0.5 + 0.5 * (1 - this.progress); const w = 40 * scale; const h = 25 * scale; const x = this.centerX + (Math.random() - 0.5) * 10 * scale; ctx.fillStyle = 'rgba(0,0,0,0.3)'; ctx.beginPath(); ctx.ellipse(x + w/2, currentY + h, w/2, h/4, 0, 0, Math.PI*2); ctx.fill(); draw3DBlock(x, currentY, w, h, 10 * scale, this.color); ctx.fillStyle = '#f1c40f'; ctx.fillRect(x + 2*scale, currentY - 5*scale, w - 4*scale, 6*scale); ctx.fillStyle = '#3e2723'; drawPixelRect(x - 2*scale, currentY + h - 5*scale, 5*scale, 8*scale, '#3e2723'); drawPixelRect(x + w - 3*scale, currentY + h - 5*scale, 5*scale, 8*scale, '#3e2723'); } }
+
 class Player {
     constructor(x, y) {
-        this.x = x;
-        this.y = y;
-        this.width = 32;
-        this.height = 40; 
-        this.radius = 16;
-        
-        this.colors = {
-            hair: '#e67e22',
-            skin: '#ffcc99',
-            shirt: '#27ae60',
-            pants: '#2c3e50',
-            boots: '#3e2723',
-            cloak: '#795548',
-            sword: '#bdc3c7',
-            swordHilt: '#8e44ad'
-        };
-
-        this.speed = 4;
-        this.lives = 3;
-        this.direction = 0;
-        
-        this.isAttacking = false;
-        this.attackDuration = 15;
-        this.attackTimer = 0;
-        this.isMoving = false;
-        
-        this.isInvulnerable = false;
-        this.invulnerableTimer = 0;
+        this.x = x; this.y = y; this.width = 32; this.height = 40; this.radius = 16;
+        this.colors = { hair: '#e67e22', skin: '#ffcc99', shirt: '#27ae60', pants: '#2c3e50', boots: '#3e2723', cloak: '#795548', sword: '#bdc3c7', swordHilt: '#8e44ad' };
+        this.speed = 4; this.lives = 3; this.direction = 0;
+        this.isAttacking = false; this.attackDuration = 15; this.attackTimer = 0;
+        this.isMoving = false; this.isInvulnerable = false; this.invulnerableTimer = 0;
+        this.hasKey = false; // Inventário
+        this.scale = 1; this.rotation = 0;
     }
-
     update() {
-        let dx = 0;
-        let dy = 0;
-        this.isMoving = false;
+        if (gameState === STATE_FALLING) {
+            this.scale = Math.max(0, this.scale - 0.02);
+            this.rotation += 0.2;
+            if (this.scale <= 0) {
+                initLevel(2); 
+                this.scale = 1; this.rotation = 0;
+            }
+            return; 
+        }
+        if (gameState === STATE_OPENING_DOOR) return; // Parado na animação da porta
 
-        if (keys.w) dy -= 1;
-        if (keys.s) dy += 1;
-        if (keys.a) dx -= 1;
-        if (keys.d) dx += 1;
+        let dx = 0; let dy = 0;
+        this.isMoving = false;
+        if (keys.w) dy -= 1; if (keys.s) dy += 1; if (keys.a) dx -= 1; if (keys.d) dx += 1;
 
         if (dx !== 0 || dy !== 0) {
             this.isMoving = true;
             const length = Math.sqrt(dx * dx + dy * dy);
             const moveX = (dx / length) * this.speed;
             const moveY = (dy / length) * this.speed;
-
-            // Colisão Eixo X
-            if (!checkMapCollision(this.x + moveX, this.y, this.radius)) {
-                this.x += moveX;
+            
+            // Verificar interação com porta ANTES de colidir/parar
+            // Se estiver tentando mover para cima e colidir com 'D'
+            if (dy < 0 && currentLevel === 2) {
+                const nextRow = Math.floor((this.y - this.radius - 5) / TILE_SIZE);
+                const col = Math.floor(this.x / TILE_SIZE);
+                if (levelMap[nextRow] && levelMap[nextRow][col] === 'D') {
+                    if (this.hasKey) {
+                        gameState = STATE_OPENING_DOOR;
+                        doorAnimationTimer = 100;
+                        createExplosion(this.x, this.y - 30, '#f1c40f'); // Efeito visual
+                        return; // Para movimento
+                    }
+                }
             }
-            // Colisão Eixo Y
-            if (!checkMapCollision(this.x, this.y + moveY, this.radius)) {
-                this.y += moveY;
+
+            if (!checkMapCollision(this.x + moveX, this.y, this.radius)) this.x += moveX;
+            if (!checkMapCollision(this.x, this.y + moveY, this.radius)) this.y += moveY;
+        }
+
+        if (currentLevel === 1) {
+            const col = Math.floor(this.x / TILE_SIZE);
+            const row = Math.floor(this.y / TILE_SIZE);
+            if (levelMap[row] && levelMap[row][col] === 'T') {
+                levelMap[row][col] = 'X'; 
+                this.x = col * TILE_SIZE + TILE_SIZE/2;
+                this.y = row * TILE_SIZE + TILE_SIZE/2;
+                gameState = STATE_FALLING;
             }
         }
 
-        // Calcular Direção Visual baseada no Mouse (Mouse agora considera a câmera)
         const angle = Math.atan2(mouse.mapY - this.y, mouse.mapX - this.x);
         const deg = angle * (180 / Math.PI);
-
         if (deg > -45 && deg <= 45) this.direction = 3; 
         else if (deg > 45 && deg <= 135) this.direction = 0;
         else if (deg > 135 || deg <= -135) this.direction = 2;
         else this.direction = 1;
 
-        if (this.isAttacking) {
-            this.attackTimer--;
-            if (this.attackTimer <= 0) this.isAttacking = false;
-        }
-
-        if (this.isInvulnerable) {
-            this.invulnerableTimer--;
-            if (this.invulnerableTimer <= 0) this.isInvulnerable = false;
-        }
+        if (this.isAttacking) { this.attackTimer--; if (this.attackTimer <= 0) this.isAttacking = false; }
+        if (this.isInvulnerable) { this.invulnerableTimer--; if (this.invulnerableTimer <= 0) this.isInvulnerable = false; }
     }
-
+    
     draw() {
-        if (this.isInvulnerable && Math.floor(globalFrame / 4) % 2 === 0) return;
-
-        const cx = this.x;
-        const cy = this.y;
-        
-        let bobY = 0;
-        let legOffset = 0;
-        if (this.isMoving) {
-            const walkCycle = Math.sin(globalFrame * 0.3);
-            bobY = Math.abs(walkCycle) * 3;
-            legOffset = walkCycle * 5;
+        ctx.save();
+        if (gameState === STATE_FALLING) {
+            ctx.translate(this.x, this.y); ctx.scale(this.scale, this.scale); ctx.rotate(this.rotation); ctx.translate(-this.x, -this.y);
         }
 
-        ctx.fillStyle = 'rgba(0,0,0,0.3)';
-        ctx.beginPath();
-        ctx.ellipse(cx, cy + 20, 12, 6, 0, 0, Math.PI * 2);
-        ctx.fill();
-
-        ctx.save();
-        ctx.translate(cx, cy - bobY);
-
-        if (this.direction === 0) this.drawFront(legOffset);
-        else if (this.direction === 1) this.drawBack(legOffset);
-        else if (this.direction === 2) this.drawSide(legOffset, true);
-        else if (this.direction === 3) this.drawSide(legOffset, false);
-
+        if (this.isInvulnerable && Math.floor(globalFrame / 4) % 2 === 0 && gameState !== STATE_FALLING) { ctx.restore(); return; }
+        
+        const cx = this.x; const cy = this.y;
+        let bobY = 0; let legOffset = 0;
+        if (this.isMoving) { const walkCycle = Math.sin(globalFrame * 0.3); bobY = Math.abs(walkCycle) * 3; legOffset = walkCycle * 5; }
+        
+        ctx.fillStyle = 'rgba(0,0,0,0.3)'; ctx.beginPath(); ctx.ellipse(cx, cy + 20, 12, 6, 0, 0, Math.PI * 2); ctx.fill();
+        ctx.save(); ctx.translate(cx, cy - bobY);
+        
+        if (gameState === STATE_ITEM_GET) {
+            this.drawFront(0); 
+            ctx.fillStyle = this.colors.shirt;
+            drawPixelRect(-18, -15, 6, 15, this.colors.shirt); drawPixelRect(12, -15, 6, 15, this.colors.shirt);
+            drawPixelRect(-18, -18, 6, 4, this.colors.skin); drawPixelRect(12, -18, 6, 4, this.colors.skin);
+        } else if (gameState === STATE_OPENING_DOOR) {
+            this.drawBack(0); // Player de costas abrindo a porta
+        } else {
+            if (this.direction === 0) this.drawFront(legOffset);
+            else if (this.direction === 1) this.drawBack(legOffset);
+            else if (this.direction === 2) this.drawSide(legOffset, true);
+            else if (this.direction === 3) this.drawSide(legOffset, false);
+        }
         ctx.restore();
+        ctx.restore(); 
     }
-
     drawFront(legOffset) {
-        drawPixelRect(-8, 10, 6, 12, this.colors.pants);
-        drawPixelRect(2, 10, 6, 12, this.colors.pants);
-        drawPixelRect(-9, 20, 8, 4, this.colors.boots);
-        drawPixelRect(1, 20, 8, 4, this.colors.boots);
+        drawPixelRect(-8, 10, 6, 12, this.colors.pants); drawPixelRect(2, 10, 6, 12, this.colors.pants);
+        drawPixelRect(-9, 20, 8, 4, this.colors.boots); drawPixelRect(1, 20, 8, 4, this.colors.boots);
         drawPixelRect(-10, -5, 20, 18, this.colors.shirt);
-        drawPixelRect(-12, -4, 4, 18, this.colors.cloak);
-        drawPixelRect(8, -4, 4, 18, this.colors.cloak);
-        drawPixelRect(-4, -4, 8, 3, this.colors.cloak);
-        drawPixelRect(-10, 8, 20, 3, '#1e272e');
+        drawPixelRect(-12, -4, 4, 18, this.colors.cloak); drawPixelRect(8, -4, 4, 18, this.colors.cloak);
+        drawPixelRect(-4, -4, 8, 3, this.colors.cloak); drawPixelRect(-10, 8, 20, 3, '#1e272e');
         drawPixelRect(-10, -22, 20, 18, this.colors.skin);
-        drawPixelRect(-11, -28, 22, 8, this.colors.cloak); 
-        drawPixelRect(-12, -26, 4, 20, this.colors.cloak);
-        drawPixelRect(8, -26, 4, 20, this.colors.cloak);
-        drawPixelRect(-8, -22, 16, 6, this.colors.hair);
-        ctx.fillStyle = '#2c3e50';
-        ctx.fillRect(-6, -14, 4, 4);
-        ctx.fillRect(2, -14, 4, 4);
-        this.drawSword(14, 5, 0); 
+        drawPixelRect(-11, -28, 22, 8, this.colors.cloak); drawPixelRect(-12, -26, 4, 20, this.colors.cloak);
+        drawPixelRect(8, -26, 4, 20, this.colors.cloak); drawPixelRect(-8, -22, 16, 6, this.colors.hair);
+        ctx.fillStyle = '#2c3e50'; ctx.fillRect(-6, -14, 4, 4); ctx.fillRect(2, -14, 4, 4);
+        if (gameState !== STATE_ITEM_GET) this.drawSword(14, 5, 0); 
     }
-
     drawBack(legOffset) {
         this.drawSword(14, 5, 0);
-        drawPixelRect(-8, 10, 6, 12, this.colors.pants);
-        drawPixelRect(2, 10, 6, 12, this.colors.pants);
-        drawPixelRect(-11, -4, 22, 20, this.colors.cloak);
-        drawPixelRect(-12, -28, 24, 24, this.colors.cloak);
+        drawPixelRect(-8, 10, 6, 12, this.colors.pants); drawPixelRect(2, 10, 6, 12, this.colors.pants);
+        drawPixelRect(-11, -4, 22, 20, this.colors.cloak); drawPixelRect(-12, -28, 24, 24, this.colors.cloak);
         drawPixelRect(-4, -10, 8, 6, this.colors.cloak); 
     }
-
     drawSide(legOffset, isLeft) {
         ctx.save();
         if (isLeft) ctx.scale(-1, 1);
-        drawPixelRect(-4 + legOffset, 10, 8, 12, this.colors.pants);
-        drawPixelRect(-5 + legOffset, 20, 10, 4, this.colors.boots);
-        drawPixelRect(-9, -4, 5, 19, this.colors.cloak);
-        drawPixelRect(-5, -5, 11, 18, this.colors.shirt);
-        drawPixelRect(-2, -2, 6, 12, this.colors.shirt); 
-        drawPixelRect(-2, 8, 6, 4, this.colors.skin); 
+        drawPixelRect(-4 + legOffset, 10, 8, 12, this.colors.pants); drawPixelRect(-5 + legOffset, 20, 10, 4, this.colors.boots);
+        drawPixelRect(-9, -4, 5, 19, this.colors.cloak); drawPixelRect(-5, -5, 11, 18, this.colors.shirt);
+        drawPixelRect(-2, -2, 6, 12, this.colors.shirt); drawPixelRect(-2, 8, 6, 4, this.colors.skin); 
         drawPixelRect(-8, -22, 16, 18, this.colors.skin);
-        drawPixelRect(-10, -28, 18, 8, this.colors.cloak); 
-        drawPixelRect(-12, -28, 8, 24, this.colors.cloak); 
+        drawPixelRect(-10, -28, 18, 8, this.colors.cloak); drawPixelRect(-12, -28, 8, 24, this.colors.cloak); 
         drawPixelRect(2, -22, 4, 6, this.colors.hair);
-        ctx.fillStyle = '#2c3e50';
-        ctx.fillRect(4, -14, 3, 4);
+        ctx.fillStyle = '#2c3e50'; ctx.fillRect(4, -14, 3, 4);
         this.drawSword(6, 6, isLeft ? -1 : 1);
         ctx.restore();
     }
-
     drawSword(x, y, sideMultiplier) {
         if (!this.isAttacking) {
-            ctx.save();
-            ctx.translate(x, y);
-            ctx.rotate(Math.PI / 4);
-            drawPixelRect(-2, -10, 4, 8, this.colors.swordHilt);
-            drawPixelRect(-3, -2, 6, 2, '#7f8c8d');
-            drawPixelRect(-2, 0, 4, 18, this.colors.sword);
-            ctx.restore();
+            ctx.save(); ctx.translate(x, y); ctx.rotate(Math.PI / 4);
+            drawPixelRect(-2, -10, 4, 8, this.colors.swordHilt); drawPixelRect(-3, -2, 6, 2, '#7f8c8d');
+            drawPixelRect(-2, 0, 4, 18, this.colors.sword); ctx.restore();
         } else {
             const progress = this.attackTimer / this.attackDuration;
             const swingAngle = (Math.PI) * (1 - progress) - (Math.PI/2);
-            ctx.save();
-            ctx.translate(0, 0);
-            ctx.rotate(swingAngle * (sideMultiplier === -1 ? -1 : 1)); 
+            ctx.save(); ctx.translate(0, 0); ctx.rotate(swingAngle * (sideMultiplier === -1 ? -1 : 1)); 
             const reach = 25;
-            drawPixelRect(reach, -2, 24, 6, this.colors.sword);
-            drawPixelRect(reach - 6, -4, 6, 10, '#7f8c8d');
+            drawPixelRect(reach, -2, 24, 6, this.colors.sword); drawPixelRect(reach - 6, -4, 6, 10, '#7f8c8d');
             drawPixelRect(reach - 12, -2, 6, 6, this.colors.swordHilt);
-            ctx.fillStyle = `rgba(255, 255, 255, ${progress})`;
-            ctx.fillRect(reach + 5, -15, 15, 40);
-            ctx.restore();
+            ctx.fillStyle = `rgba(255, 255, 255, ${progress})`; ctx.fillRect(reach + 5, -15, 15, 40); ctx.restore();
         }
     }
-
-    attack() {
-        if (!this.isAttacking) {
-            this.isAttacking = true;
-            this.attackTimer = this.attackDuration;
-        }
-    }
+    attack() { if (!this.isAttacking) { this.isAttacking = true; this.attackTimer = this.attackDuration; } }
 }
 
 class Enemy {
     constructor(x, y, type) {
-        this.x = x;
-        this.y = y;
-        this.type = type; // 'G' = Goblin, 'S' = Snake
-        
-        if (this.type === 'S') {
-            this.width = 24;
-            this.radius = 12;
-            this.color = '#2ecc71'; // Verde brilhante
-            this.speed = 2.5; // Rápido
-        } else {
-            // Goblin
-            this.width = 30;
-            this.radius = 15;
-            this.color = '#27ae60'; // Verde escuro
-            this.speed = 1.5; // Lento
-        }
-        
+        this.x = x; this.y = y; this.type = type; this.active = true; this.hasActivated = false; 
+        if (this.type === 'S') { this.width = 24; this.radius = 12; this.color = '#2ecc71'; this.speed = 2.5; this.hp = 1; } 
+        else if (this.type === 'G') { this.width = 30; this.radius = 15; this.color = '#27ae60'; this.speed = 1.5; this.hp = 1; }
         this.bounceOffset = Math.random() * 100;
     }
-
     draw() {
-        // Offset visual de animação
         const bounce = Math.abs(Math.sin((globalFrame + this.bounceOffset) * 0.1)) * 5;
         const ey = this.y - bounce;
-
-        ctx.fillStyle = 'rgba(0,0,0,0.2)';
-        ctx.beginPath();
-        ctx.ellipse(this.x, this.y + 10, this.radius, this.radius/2, 0, 0, Math.PI * 2);
-        ctx.fill();
-
+        ctx.fillStyle = 'rgba(0,0,0,0.2)'; ctx.beginPath(); ctx.ellipse(this.x, this.y + 10, this.radius, this.radius/2, 0, 0, Math.PI * 2); ctx.fill();
+        if (!this.hasActivated) { if (Math.floor(globalFrame / 60) % 2 === 0) { ctx.fillStyle = '#fff'; ctx.font = '10px Arial'; ctx.fillText("z", this.x + 10, this.y - 30); ctx.fillText("Z", this.x + 15, this.y - 35); } }
         if (this.type === 'S') {
-            // Desenho da Cobra
-            drawPixelRect(this.x - 10, ey, 20, 10, this.color); // Corpo deitado
-            drawPixelRect(this.x - 5, ey - 10, 10, 10, this.color); // Cabeça erguida
-            // Olhos
-            ctx.fillStyle = '#c0392b'; // Olho vermelho
-            drawPixelRect(this.x, ey - 8, 2, 2, '#c0392b');
-            // Lingua
-            if (globalFrame % 20 < 10) {
-                drawPixelRect(this.x - 1, ey - 4, 2, 6, '#e74c3c');
-            }
+            drawPixelRect(this.x - 10, ey, 20, 10, this.color); drawPixelRect(this.x - 5, ey - 10, 10, 10, this.color);
+            if (this.hasActivated) { ctx.fillStyle = '#c0392b'; drawPixelRect(this.x, ey - 8, 2, 2, '#c0392b'); } else { ctx.fillStyle = '#1e8449'; drawPixelRect(this.x, ey - 8, 4, 1, '#1e8449'); }
+            if (this.hasActivated && globalFrame % 20 < 10) drawPixelRect(this.x - 1, ey - 4, 2, 6, '#e74c3c');
         } else {
-            // Desenho do Goblin
-            drawPixelRect(this.x - 12, ey - 20, 24, 20, this.color); // Cabeça/Corpo
-            drawPixelRect(this.x - 18, ey - 15, 6, 8, this.color); // Orelha esq
-            drawPixelRect(this.x + 12, ey - 15, 6, 8, this.color); // Orelha dir
-            
-            ctx.fillStyle = '#f1c40f'; // Olhos amarelos
-            drawPixelRect(this.x - 6, ey - 12, 4, 4, '#f1c40f');
-            drawPixelRect(this.x + 2, ey - 12, 4, 4, '#f1c40f');
-            
-            // Corpo simples
-            drawPixelRect(this.x - 8, ey, 16, 12, '#5d4037'); // Roupa marrom
+            drawPixelRect(this.x - 12, ey - 20, 24, 20, this.color); drawPixelRect(this.x - 18, ey - 15, 6, 8, this.color); drawPixelRect(this.x + 12, ey - 15, 6, 8, this.color);
+             if (this.hasActivated) { ctx.fillStyle = '#f1c40f'; drawPixelRect(this.x - 6, ey - 12, 4, 4, '#f1c40f'); drawPixelRect(this.x + 2, ey - 12, 4, 4, '#f1c40f'); } else { ctx.fillStyle = '#1e8449'; drawPixelRect(this.x - 6, ey - 10, 4, 1, '#1e8449'); drawPixelRect(this.x + 2, ey - 10, 4, 1, '#1e8449'); }
+            drawPixelRect(this.x - 8, ey, 16, 12, '#5d4037');
         }
     }
-
     update(player) {
+        const dist = Math.hypot(player.x - this.x, player.y - this.y);
+        if (!this.hasActivated) { if (dist < 300) { this.hasActivated = true; this.y -= 5; } else { return; } }
         const angle = Math.atan2(player.y - this.y, player.x - this.x);
-        
-        // Simples IA de perseguição
         const moveX = Math.cos(angle) * this.speed;
         const moveY = Math.sin(angle) * this.speed;
+        if (!checkMapCollision(this.x + moveX, this.y, this.radius)) this.x += moveX;
+        if (!checkMapCollision(this.x, this.y + moveY, this.radius)) this.y += moveY;
+    }
+    takeDamage() { this.hp--; this.hasActivated = true; if (this.hp <= 0) this.active = false; }
+}
 
-        // Tentar mover X
-        if (!checkMapCollision(this.x + moveX, this.y, this.radius)) {
-            this.x += moveX;
+class BossSnake {
+    constructor(x, y) {
+        this.x = x; this.y = y; this.type = 'BOSS'; this.active = true;
+        this.width = 120; this.radius = 60; this.color = '#8e44ad'; this.spotColor = '#2ecc71';
+        this.speed = 1.8; this.hp = 3; this.bounceOffset = 0;
+        this.isInvulnerable = false; this.invulnerableTimer = 0;
+        this.attackTimer = 0; this.shootInterval = 120; this.hasActivated = false;
+    }
+    draw() {
+        if (this.isInvulnerable && Math.floor(globalFrame / 4) % 2 === 0) return;
+        const breath = this.hasActivated ? Math.abs(Math.sin((globalFrame * 0.05))) * 8 : Math.abs(Math.sin((globalFrame * 0.02))) * 2;
+        const ey = this.y - breath;
+        ctx.fillStyle = 'rgba(0,0,0,0.3)'; ctx.beginPath(); ctx.ellipse(this.x, this.y + 20, this.radius, this.radius/2, 0, 0, Math.PI * 2); ctx.fill();
+        drawPixelRect(this.x - 50, ey, 100, 50, this.color); drawPixelRect(this.x - 30, ey - 30, 60, 30, this.color);
+        drawPixelRect(this.x - 30, ey + 10, 12, 12, this.spotColor); drawPixelRect(this.x + 20, ey + 15, 15, 15, this.spotColor); drawPixelRect(this.x, ey - 10, 10, 10, this.spotColor);
+        if (this.hasActivated) {
+            ctx.fillStyle = '#f1c40f'; drawPixelRect(this.x - 25, ey - 20, 15, 15, '#f1c40f'); drawPixelRect(this.x + 10, ey - 20, 15, 15, '#f1c40f');
+            ctx.fillStyle = 'black'; drawPixelRect(this.x - 20, ey - 15, 6, 6, 'black'); drawPixelRect(this.x + 15, ey - 15, 6, 6, 'black');
+        } else {
+            ctx.fillStyle = '#6c3483'; drawPixelRect(this.x - 25, ey - 15, 15, 4, '#6c3483'); drawPixelRect(this.x + 10, ey - 15, 15, 4, '#6c3483');
         }
-        // Tentar mover Y
-        if (!checkMapCollision(this.x, this.y + moveY, this.radius)) {
-            this.y += moveY;
+        if (this.hasActivated && globalFrame % 30 < 15) {
+            drawPixelRect(this.x - 6, ey + 20, 12, 30, '#e74c3c'); drawPixelRect(this.x - 12, ey + 45, 6, 12, '#e74c3c'); drawPixelRect(this.x + 6, ey + 45, 6, 12, '#e74c3c');
+        }
+        if (this.hasActivated) {
+            const hpBarW = 100; ctx.fillStyle = 'red'; ctx.fillRect(this.x - hpBarW/2, this.y - 80, hpBarW, 12);
+            ctx.fillStyle = '#2ecc71'; ctx.fillRect(this.x - hpBarW/2, this.y - 80, hpBarW * (this.hp / 3), 12);
+            ctx.strokeStyle = 'black'; ctx.lineWidth = 2; ctx.strokeRect(this.x - hpBarW/2, this.y - 80, hpBarW, 12);
+        }
+    }
+    update(player) {
+        const dist = Math.hypot(player.x - this.x, player.y - this.y);
+        if (!this.hasActivated) {
+            if (dist < 450) { this.hasActivated = true; createExplosion(this.x, this.y - 50, '#ffffff'); }
+            return;
+        }
+        if (dist > 100 && this.attackTimer < this.shootInterval - 30) {
+            const angle = Math.atan2(player.y - this.y, player.x - this.x);
+            const moveX = Math.cos(angle) * this.speed;
+            const moveY = Math.sin(angle) * this.speed;
+            if (!checkMapCollision(this.x + moveX, this.y, this.radius)) this.x += moveX;
+            if (!checkMapCollision(this.x, this.y + moveY, this.radius)) this.y += moveY;
+        }
+        this.attackTimer++;
+        if (this.attackTimer >= this.shootInterval) {
+            projectiles.push(new Projectile(this.x, this.y - 20, player.x, player.y));
+            this.attackTimer = 0;
+            createExplosion(this.x, this.y - 20, '#9b59b6');
+        }
+        if (this.isInvulnerable) { this.invulnerableTimer--; if (this.invulnerableTimer <= 0) this.isInvulnerable = false; }
+    }
+    takeDamage() {
+        if (!this.hasActivated) return;
+        if (!this.isInvulnerable) {
+            this.hp--; this.isInvulnerable = true; this.invulnerableTimer = 60;
+            if (this.hp <= 0) {
+                this.active = false;
+                for(let i=0; i<5; i++) createExplosion(this.x + Math.random()*40-20, this.y + Math.random()*40-20, '#8e44ad');
+                items.push(new KeyItem(this.x, this.y));
+            }
         }
     }
 }
@@ -514,33 +483,119 @@ class Enemy {
  */
 let player;
 let enemies = [];
+let projectiles = [];
+let items = [];
 let particles = [];
-let fogSystem; // Instância da névoa
+let fogSystem;
+let menuParticles = [];
+let menuCarts = [];
+let cartSpawnTimer = 0;
+let itemGetTimer = 0; 
 
-function init() {
+function openSecretPath() {
+    for(let r = 5; r <= 7; r++) {
+        for(let c = 0; c < 43; c++) { levelMap[r][c] = 'c'; }
+        levelMap[r][15] = 'T';
+    }
+    createExplosion(player.x - 100, player.y, '#ffffff'); 
+}
+
+function openDoor() {
+    // 1. Abre a porta visualmente
+    for (let r = 0; r < levelMap.length; r++) {
+        for (let c = 0; c < levelMap[r].length; c++) {
+            if (levelMap[r][c] === 'D') {
+                levelMap[r][c] = 'f'; // Vira chão
+                createExplosion(c * TILE_SIZE + TILE_SIZE/2, r * TILE_SIZE + TILE_SIZE/2, '#8d6e63');
+            }
+        }
+    }
+
+    // 2. Revela o corredor (Fase 2)
+    if (currentLevel === 2) {
+        // Copia as linhas do corredor (0 a 13) do mapa completo para o mapa atual
+        for (let r = 0; r < 14; r++) {
+            levelMap[r] = FULL_MAP_DATA_LEVEL_2[r].split('');
+            // Efeito visual de revelação (poeira mágica em posições aleatórias do corredor)
+            if (Math.random() > 0.5) {
+                createExplosion(canvas.width/2 + (Math.random()-0.5)*200, r * TILE_SIZE, '#ffffff');
+            }
+        }
+    }
+}
+
+function initLevel(level) {
+    // Persistência de dados entre níveis
+    let savedLives = 3;
+    let savedKey = false;
+    
+    // Se não for o nível 1 e o player já existir, salva os dados
+    if (level > 1 && typeof player !== 'undefined') {
+        savedLives = player.lives;
+        savedKey = player.hasKey;
+    }
+
+    currentLevel = level;
+    gameState = STATE_PLAYING;
     enemies = [];
     particles = [];
-    score = 0;
+    projectiles = [];
+    items = [];
+    
+    // Reseta score apenas no início do jogo (Nível 1)
+    if (level === 1) {
+        score = 0;
+    }
+    
     isGameOver = false;
-    uiElement.style.display = 'none';
-    fogSystem = new FogSystem(); // Inicia a névoa
+    
+    if (level === 1) fogSystem = new FogSystem();
+    else fogSystem = null;
 
-    // Parse do Mapa
-    for (let r = 0; r < MAP_DATA.length; r++) {
-        for (let c = 0; c < MAP_DATA[r].length; c++) {
-            const char = MAP_DATA[r][c];
+    // Carregar Mapa
+    if (level === 1) {
+        let rawData = RAW_MAP_DATA_LEVEL_1.map(row => PADDING_LEFT + row);
+        levelMap = rawData.map(row => row.split(''));
+    } else {
+        // Nível 2: Carrega apenas o quarto inicialmente
+        // O corredor (linhas < 14) começa escondido ('a')
+        levelMap = FULL_MAP_DATA_LEVEL_2.map((row, rowIndex) => {
+            if (rowIndex < 14) {
+                // Cria uma linha vazia do mesmo tamanho
+                return "a".repeat(row.length).split('');
+            }
+            return row.split('');
+        });
+    }
+
+    mapWidth = levelMap[0].length * TILE_SIZE;
+    mapHeight = levelMap.length * TILE_SIZE;
+
+    for (let r = 0; r < levelMap.length; r++) {
+        for (let c = 0; c < levelMap[r].length; c++) {
+            const char = levelMap[r][c];
             const x = c * TILE_SIZE + TILE_SIZE/2;
             const y = r * TILE_SIZE + TILE_SIZE/2;
 
             if (char === 'P') {
                 player = new Player(x, y);
-            } else if (char === 'S') {
-                enemies.push(new Enemy(x, y, 'S'));
-            } else if (char === 'G') {
-                enemies.push(new Enemy(x, y, 'G'));
+                // Restaura dados se for nível > 1
+                if (level > 1) {
+                    player.lives = savedLives;
+                    player.hasKey = savedKey;
+                }
             }
+            else if (char === 'S') enemies.push(new Enemy(x, y, 'S'));
+            else if (char === 'G') enemies.push(new Enemy(x, y, 'G'));
+            else if (char === 'B') enemies.push(new BossSnake(x, y));
         }
     }
+}
+
+function initMenu() {
+    gameState = STATE_MENU;
+    menuParticles = [];
+    menuCarts = [];
 }
 
 function createExplosion(x, y, color) {
@@ -552,27 +607,7 @@ function createExplosion(x, y, color) {
     }
 }
 
-function drawUI() {
-    // Corações
-    for (let i = 0; i < player.lives; i++) {
-        const x = 30 + (i * 35);
-        const y = 30;
-        ctx.fillStyle = '#e74c3c';
-        drawPixelRect(x + 5, y, 5, 5, '#e74c3c');
-        drawPixelRect(x + 15, y, 5, 5, '#e74c3c');
-        drawPixelRect(x, y + 5, 25, 5, '#e74c3c');
-        drawPixelRect(x + 5, y + 10, 15, 5, '#e74c3c');
-        drawPixelRect(x + 10, y + 15, 5, 5, '#e74c3c');
-    }
-    // Score
-    ctx.fillStyle = 'white';
-    ctx.font = '20px "Courier New"';
-    ctx.textAlign = 'right';
-    ctx.fillText(`SCORE: ${score.toString().padStart(5, '0')}`, canvas.width - 30, 45);
-}
-
 function drawMap() {
-    // Renderiza apenas tiles visíveis para performance
     const startCol = Math.floor(camera.x / TILE_SIZE);
     const endCol = startCol + (camera.width / TILE_SIZE) + 1;
     const startRow = Math.floor(camera.y / TILE_SIZE);
@@ -580,85 +615,86 @@ function drawMap() {
 
     for (let row = startRow; row <= endRow; row++) {
         for (let col = startCol; col <= endCol; col++) {
-            if (row >= 0 && row < MAP_DATA.length && col >= 0 && col < MAP_DATA[0].length) {
-                const char = MAP_DATA[row][col];
+            if (row >= 0 && row < levelMap.length && col >= 0 && col < levelMap[0].length) {
+                const char = levelMap[row][col];
                 const x = col * TILE_SIZE;
                 const y = row * TILE_SIZE;
 
-                // 1. Desenha Chão Base (Fundo mais escuro)
-                ctx.fillStyle = '#3e3a36'; // Marrom acinzentado bem escuro (terra/sombra)
-                ctx.fillRect(x, y, TILE_SIZE, TILE_SIZE);
-                
-                // Detalhe do caminho (Área andável)
-                if (char !== 'a') {
-                     ctx.fillStyle = '#605850'; // Marrom acinzentado (Trilha)
-                     ctx.fillRect(x + 4, y + 4, TILE_SIZE - 8, TILE_SIZE - 8);
+                if (currentLevel === 1) {
+                    if (char === 'X') ctx.fillStyle = '#000000'; // Buraco Visível
+                    else ctx.fillStyle = '#3e3a36'; // Terra
+                    ctx.fillRect(x, y, TILE_SIZE, TILE_SIZE);
+                    
+                    if (char === 'c' || char === 'P' || char === 'S' || char === 'G' || char === 'B' || char === 'T') {
+                         ctx.fillStyle = '#605850'; ctx.fillRect(x + 4, y + 4, TILE_SIZE - 8, TILE_SIZE - 8);
+                         const seed = (col * 11) + (row * 37);
+                         const variant = seed % 10;
+                         if (variant === 1) { ctx.fillStyle = '#4a4540'; drawPixelRect(x + 12, y + 10, 8, 6, '#4a4540'); drawPixelRect(x + 35, y + 42, 6, 6, '#4a4540'); } 
+                         else if (variant === 2) { ctx.fillStyle = '#bdc3c7'; drawPixelRect(x + 40, y + 15, 4, 4, '#bdc3c7'); drawPixelRect(x + 15, y + 35, 4, 4, '#bdc3c7'); drawPixelRect(x + 45, y + 45, 4, 4, '#bdc3c7'); }
+                         else if (variant === 3) { ctx.fillStyle = '#554d46'; drawPixelRect(x + 20, y + 20, 15, 10, '#554d46'); }
+                    }
 
-                     // Geração Procedural de Detalhes (Baseado na posição para não piscar)
-                     // Usamos bitwise operations simples para criar um "número aleatório" fixo para este tile
-                     const seed = (col * 11) + (row * 37);
-                     const variant = seed % 10;
+                    if (char === 'a') {
+                        const seed = (col * 11) + (row * 37);
+                        const treeVariant = seed % 5;
+                        drawPixelRect(x + 26, y + 32, 12, 32, '#2c3e50'); 
+                        if (treeVariant === 0) { drawPixelRect(x + 30, y + 10, 4, 22, '#2c3e50'); drawPixelRect(x + 14, y + 22, 16, 4, '#2c3e50'); drawPixelRect(x + 14, y + 14, 4, 8, '#2c3e50'); drawPixelRect(x + 38, y + 18, 14, 4, '#2c3e50'); drawPixelRect(x + 48, y + 10, 4, 8, '#2c3e50'); } 
+                        else if (treeVariant === 1) {
+                            drawPixelRect(x + 10, y + 10, 44, 30, '#ecf0f1'); drawPixelRect(x + 16, y, 32, 20, '#ecf0f1'); drawPixelRect(x + 10, y + 35, 44, 5, '#bdc3c7');
+                            const fruitColor = '#8e44ad'; drawPixelRect(x + 15, y + 20, 6, 6, fruitColor); drawPixelRect(x + 42, y + 25, 6, 6, fruitColor); drawPixelRect(x + 28, y + 8, 6, 6, fruitColor);
+                        } 
+                        else { drawPixelRect(x + 10, y + 10, 44, 30, '#ecf0f1'); drawPixelRect(x + 16, y, 32, 20, '#ecf0f1'); drawPixelRect(x + 10, y + 35, 44, 5, '#bdc3c7'); }
+                    }
+                } 
+                else if (currentLevel === 2) {
+                    ctx.fillStyle = '#000000'; 
+                    ctx.fillRect(x, y, TILE_SIZE, TILE_SIZE);
 
-                     if (variant === 1) { 
-                         // Variação 1: Pedras no caminho
-                         ctx.fillStyle = '#4a4540'; // Pedra escura
-                         drawPixelRect(x + 12, y + 10, 8, 6, '#4a4540');
-                         drawPixelRect(x + 35, y + 42, 6, 6, '#4a4540');
-                     } 
-                     else if (variant === 2) {
-                         // Variação 2: Folhas Fantasma Caídas (Brancas/Cinza)
-                         ctx.fillStyle = '#bdc3c7'; 
-                         drawPixelRect(x + 40, y + 15, 4, 4, '#bdc3c7');
-                         drawPixelRect(x + 15, y + 35, 4, 4, '#bdc3c7');
-                         drawPixelRect(x + 45, y + 45, 4, 4, '#bdc3c7');
-                     }
-                     else if (variant === 3) {
-                         // Variação 3: Manchas de terra
-                         ctx.fillStyle = '#554d46'; 
-                         drawPixelRect(x + 20, y + 20, 15, 10, '#554d46');
-                     }
-                }
+                    if (char !== 'a' && char !== 'w') {
+                        ctx.fillStyle = '#5d4037'; // Madeira
+                        ctx.fillRect(x, y, TILE_SIZE, TILE_SIZE);
+                        ctx.fillStyle = '#4e342e';
+                        ctx.fillRect(x, y + TILE_SIZE - 2, TILE_SIZE, 2);
+                        if ((col + row) % 2 === 0) ctx.fillRect(x + TILE_SIZE - 2, y, 2, TILE_SIZE);
+                    }
 
-                // 2. Desenha Árvores
-                if (char === 'a') {
-                    // Seed determinística para variar o tipo da árvore baseado na posição (x,y)
-                    const seed = (col * 11) + (row * 37);
-                    const treeVariant = seed % 5; // Gera números de 0 a 4
-
-                    // Tronco (Comum a todas, mas levemente ajustado)
-                    drawPixelRect(x + 26, y + 32, 12, 32, '#2c3e50'); 
-
-                    if (treeVariant === 0) {
-                        // === ÁRVORE MORTA (Sem folhas) ===
-                        // Galho Central
-                        drawPixelRect(x + 30, y + 10, 4, 22, '#2c3e50'); 
-                        // Galho Esquerdo
-                        drawPixelRect(x + 14, y + 22, 16, 4, '#2c3e50');
-                        drawPixelRect(x + 14, y + 14, 4, 8, '#2c3e50'); // Ponta
-                        // Galho Direito
-                        drawPixelRect(x + 38, y + 18, 14, 4, '#2c3e50');
-                        drawPixelRect(x + 48, y + 10, 4, 8, '#2c3e50'); // Ponta
-                    } 
-                    else if (treeVariant === 1) {
-                        // === ÁRVORE COM FRUTOS ===
-                        // Folhagem Base
-                        drawPixelRect(x + 10, y + 10, 44, 30, '#ecf0f1'); 
-                        drawPixelRect(x + 16, y, 32, 20, '#ecf0f1');
-                        drawPixelRect(x + 10, y + 35, 44, 5, '#bdc3c7'); // Sombra
-                        
-                        // Frutos (Cor Roxo Místico para destacar no branco)
-                        const fruitColor = '#8e44ad';
-                        drawPixelRect(x + 15, y + 20, 6, 6, fruitColor);
-                        drawPixelRect(x + 42, y + 25, 6, 6, fruitColor);
-                        drawPixelRect(x + 28, y + 8, 6, 6, fruitColor);
-                    } 
-                    else {
-                        // === ÁRVORE PADRÃO ===
-                        // Folhas Brancas/Cinza claro (Ghost Forest)
-                        drawPixelRect(x + 10, y + 10, 44, 30, '#ecf0f1'); // Camada base
-                        drawPixelRect(x + 16, y, 32, 20, '#ecf0f1'); // Topo
-                        // Sombra leve nas folhas
-                        drawPixelRect(x + 10, y + 35, 44, 5, '#bdc3c7');
+                    if (char === 'w') {
+                        ctx.fillStyle = '#546e7a'; ctx.fillRect(x, y, TILE_SIZE, TILE_SIZE);
+                        ctx.fillStyle = '#455a64'; drawPixelRect(x + 5, y + 10, 20, 10, '#455a64'); drawPixelRect(x + 35, y + 30, 20, 10, '#455a64');
+                    }
+                    else if (char === 'D') {
+                        ctx.fillStyle = '#3e2723'; ctx.fillRect(x + 10, y + 5, 44, 59);
+                        ctx.fillStyle = '#f1c40f'; drawPixelRect(x + 45, y + 35, 4, 4, '#f1c40f');
+                    }
+                    else if (char === 'C') {
+                        ctx.fillStyle = '#c0392b'; ctx.fillRect(x + 10, y + 5, 44, 50);
+                        ctx.fillStyle = '#ecf0f1'; ctx.fillRect(x + 15, y + 10, 34, 15);
+                    }
+                    else if (char === 'A') {
+                        ctx.fillStyle = '#4e342e'; ctx.fillRect(x + 5, y + 5, 54, 54);
+                        ctx.fillStyle = '#3e2723'; ctx.fillRect(x + 8, y + 8, 22, 48); ctx.fillRect(x + 34, y + 8, 22, 48);
+                        ctx.fillStyle = '#f1c40f'; drawPixelRect(x + 25, y + 30, 3, 3, '#f1c40f'); drawPixelRect(x + 36, y + 30, 3, 3, '#f1c40f');
+                    }
+                    else if (char === 'M') {
+                        ctx.fillStyle = '#6d4c41'; ctx.fillRect(x + 10, y + 20, 44, 44);
+                        ctx.fillStyle = '#5d4037'; ctx.fillRect(x + 15, y + 25, 34, 15);
+                    }
+                    else if (char === 'K') { // Armadura
+                        ctx.fillStyle = '#90a4ae'; drawPixelRect(x + 20, y + 10, 24, 40, '#90a4ae');
+                        ctx.fillStyle = '#cfd8dc'; drawPixelRect(x + 28, y + 15, 8, 8, '#cfd8dc'); // Elmo
+                        ctx.fillStyle = '#b0bec5'; drawPixelRect(x + 15, y + 25, 5, 20, '#b0bec5'); // Braço E
+                        drawPixelRect(x + 44, y + 25, 5, 20, '#b0bec5'); // Braço D
+                    }
+                    else if (char === 'L') { // Mesa Longa
+                        ctx.fillStyle = '#3e2723'; ctx.fillRect(x + 5, y + 15, 54, 30);
+                        ctx.fillStyle = '#5d4037'; ctx.fillRect(x + 10, y + 20, 44, 20); // Toalha/Centro
+                        // Candelabro
+                        ctx.fillStyle = '#f1c40f'; drawPixelRect(x + 30, y + 5, 4, 10, '#f1c40f');
+                        drawPixelRect(x + 25, y + 5, 2, 6, '#f1c40f'); drawPixelRect(x + 37, y + 5, 2, 6, '#f1c40f');
+                    }
+                    else if (char === 'O') { // Cadeira Velha
+                        ctx.fillStyle = '#4e342e'; drawPixelRect(x + 20, y + 20, 24, 24, '#4e342e');
+                        ctx.fillStyle = '#6d4c41'; drawPixelRect(x + 20, y + 10, 24, 10, '#6d4c41'); // Encosto
                     }
                 }
             }
@@ -666,112 +702,262 @@ function drawMap() {
     }
 }
 
+// === DESENHO DO MENU ===
+function drawMenu() {
+    const centerX = canvas.width / 2;
+    const centerY = canvas.height / 2;
+    const skyGradient = ctx.createLinearGradient(0, 0, 0, canvas.height);
+    skyGradient.addColorStop(0, '#3498db'); skyGradient.addColorStop(1, '#a2d9ff');
+    ctx.fillStyle = skyGradient; ctx.fillRect(0, 0, canvas.width, canvas.height);
+    const sunX = canvas.width - 150; const sunY = 100;
+    ctx.fillStyle = 'rgba(255, 235, 59, 0.3)'; ctx.beginPath(); ctx.arc(sunX, sunY, 60, 0, Math.PI*2); ctx.fill();
+    ctx.fillStyle = '#f1c40f'; ctx.beginPath(); ctx.arc(sunX, sunY, 30, 0, Math.PI*2); ctx.fill();
+    ctx.fillStyle = '#2c3e50'; ctx.beginPath(); ctx.moveTo(0, canvas.height/2 + 50); ctx.lineTo(150, canvas.height/2 - 100); ctx.lineTo(300, canvas.height/2 + 50); ctx.lineTo(500, canvas.height/2 - 150); ctx.lineTo(800, canvas.height/2 + 50); ctx.lineTo(canvas.width, canvas.height/2 - 50); ctx.lineTo(canvas.width, canvas.height); ctx.lineTo(0, canvas.height); ctx.fill();
+    const groundY = canvas.height / 2 + 50;
+    ctx.fillStyle = '#27ae60'; ctx.fillRect(0, groundY, canvas.width, canvas.height - groundY);
+    ctx.fillStyle = '#2ecc71';
+    for(let i=0; i<100; i++) { const rx = (i * 137) % canvas.width; const ry = groundY + (i * 53) % (canvas.height - groundY); if (Math.random() > 0.9) ctx.fillRect(rx, ry, 2, 2); }
+    ctx.fillStyle = '#d7ccc8'; ctx.beginPath(); ctx.moveTo(centerX - 60, groundY); ctx.lineTo(centerX + 60, groundY); ctx.lineTo(centerX + 300, canvas.height); ctx.lineTo(centerX - 300, canvas.height); ctx.fill();
+    const wallHeight = 60; const wallDepth = 20; const wallColor = '#95a5a6';
+    draw3DBlock(0, groundY - wallHeight, centerX - 80, wallHeight, wallDepth, wallColor);
+    draw3DBlock(centerX + 80, groundY - wallHeight, canvas.width - (centerX + 80), wallHeight, wallDepth, wallColor);
+    const gateW = 160; const gateH = wallHeight + 20; const gateX = centerX - 80;
+    draw3DBlock(gateX - 20, groundY - gateH, 30, gateH, 30, '#7f8c8d'); draw3DBlock(gateX + gateW - 10, groundY - gateH, 30, gateH, 30, '#7f8c8d'); draw3DBlock(gateX, groundY - gateH + 20, gateW, 20, 10, '#5d4037');
+    ctx.fillStyle = '#1a0f0a'; ctx.fillRect(gateX, groundY - gateH + 40, gateW, gateH - 40);
+    const castleY = groundY - 180; const castleX = centerX - 60;
+    draw3DBlock(castleX, castleY, 120, 140, 40, '#bdc3c7');
+    ctx.fillStyle = '#2980b9'; ctx.beginPath(); ctx.moveTo(castleX - 10, castleY); ctx.lineTo(castleX + 60 + 20, castleY - 60); ctx.lineTo(castleX + 120 + 10, castleY); ctx.fill();
+    ctx.fillStyle = '#1f618d'; ctx.beginPath(); ctx.moveTo(castleX + 120 + 10, castleY); ctx.lineTo(castleX + 60 + 20, castleY - 60); ctx.lineTo(castleX + 120 + 30, castleY - 20); ctx.fill();
+    draw3DBlock(centerX - 200, groundY - 90, 50, 50, 30, '#ecf0f1');
+    ctx.fillStyle = '#d35400'; ctx.beginPath(); ctx.moveTo(centerX - 210, groundY - 90); ctx.lineTo(centerX - 175, groundY - 120); ctx.lineTo(centerX - 140, groundY - 90); ctx.fill();
+    draw3DBlock(centerX - 160, groundY - 110, 10, 20, 5, '#7f8c8d');
+    if (Math.random() < 0.08) menuParticles.push(new MenuSmoke(centerX - 155, groundY - 115));
+    draw3DBlock(centerX + 150, groundY - 100, 60, 60, 30, '#ecf0f1');
+    ctx.fillStyle = '#c0392b'; ctx.beginPath(); ctx.moveTo(centerX + 140, groundY - 100); ctx.lineTo(centerX + 180, groundY - 140); ctx.lineTo(centerX + 220, groundY - 100); ctx.fill();
+    cartSpawnTimer++; if (cartSpawnTimer > 120) { if (Math.random() < 0.5) menuCarts.push(new Cart(centerX, canvas.height + 50, groundY)); cartSpawnTimer = 0; }
+    menuCarts.sort((a,b) => a.progress - b.progress);
+    menuCarts.forEach((cart, i) => { cart.update(); cart.draw(); if (!cart.active) menuCarts.splice(i, 1); });
+    menuParticles.forEach((p, i) => { p.update(); p.draw(); if (p.life <= 0) menuParticles.splice(i, 1); });
+    ctx.fillStyle = '#ffffff'; ctx.strokeStyle = '#000000'; ctx.lineWidth = 6; ctx.font = '50px "Press Start 2P"'; ctx.textAlign = 'center';
+    const titleText = "Aventura da Ladra"; const titleY = 120;
+    ctx.fillStyle = 'rgba(0,0,0,0.5)'; ctx.fillText(titleText, centerX + 5, titleY + 5);
+    ctx.fillStyle = '#ffffff'; ctx.strokeText(titleText, centerX, titleY); ctx.fillText(titleText, centerX, titleY);
+    if (Math.floor(globalFrame / 30) % 2 === 0) { ctx.font = '20px "Press Start 2P"'; ctx.fillStyle = '#f1c40f'; ctx.strokeStyle = '#000'; ctx.lineWidth = 3; ctx.strokeText("CLIQUE PARA INICIAR", centerX, canvas.height - 80); ctx.fillText("CLIQUE PARA INICIAR", centerX, canvas.height - 80); }
+}
+
 function updateCamera() {
-    // Centraliza no player
     camera.x = player.x - canvas.width / 2;
     camera.y = player.y - canvas.height / 2;
-
-    // Trava nos limites do mapa
     camera.x = Math.max(0, Math.min(camera.x, mapWidth - canvas.width));
     camera.y = Math.max(0, Math.min(camera.y, mapHeight - canvas.height));
-    
-    // Se o mapa for menor que a tela, centraliza o mapa
     if(mapWidth < canvas.width) camera.x = -(canvas.width - mapWidth) / 2;
     if(mapHeight < canvas.height) camera.y = -(canvas.height - mapHeight) / 2;
 }
 
+// === GAME LOOP PRINCIPAL ===
 function animate() {
-    if (isGameOver) return;
-    
     animationId = requestAnimationFrame(animate);
     globalFrame++;
 
-    // Limpa tela
-    ctx.fillStyle = '#050510'; // Fundo do canvas (fora do mapa) ainda mais escuro
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    if (gameState === STATE_MENU) {
+        drawMenu();
+    } 
+    else if (gameState === STATE_PLAYING || gameState === STATE_GAMEOVER || gameState === STATE_ITEM_GET || gameState === STATE_FALLING || gameState === STATE_OPENING_DOOR) {
+        // Limpa tela
+        ctx.fillStyle = '#050510';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-    updateCamera();
+        updateCamera();
 
-    // === INICIO DO MUNDO DO JOGO ===
-    ctx.save();
-    ctx.translate(-camera.x, -camera.y);
+        ctx.save();
+        ctx.translate(-camera.x, -camera.y);
 
-    drawMap();
+        drawMap();
 
-    // Ordenar entidades por Y
-    const entities = [...enemies, player].sort((a, b) => a.y - b.y);
-
-    player.update();
-
-    entities.forEach(entity => {
-        if (entity === player) {
-            player.draw();
-        } else {
-            entity.update(player);
-            entity.draw();
+        const entities = [...enemies, player].sort((a, b) => a.y - b.y);
+        
+        // Player update controlado
+        if (gameState !== STATE_ITEM_GET) {
+            player.update();
         }
-    });
 
-    for (let i = particles.length - 1; i >= 0; i--) {
-        const p = particles[i];
-        p.update();
-        p.draw();
-        if (p.life <= 0) particles.splice(i, 1);
-    }
-
-    // --- EFEITOS ATMOSFÉRICOS ---
-    
-    // 1. Escuridão Global (Noite/Ambiente Dark)
-    // Desenhamos um retângulo preto semi-transparente sobre toda a área visível
-    ctx.fillStyle = 'rgba(0, 5, 20, 0.45)'; 
-    ctx.fillRect(camera.x, camera.y, camera.width, camera.height);
-
-    // 2. Névoa Passando
-    fogSystem.update();
-    fogSystem.draw(ctx);
-
-    // Colisões e Lógica de Combate
-    for (let i = enemies.length - 1; i >= 0; i--) {
-        const enemy = enemies[i];
-        const dist = Math.hypot(player.x - enemy.x, player.y - enemy.y);
-
-        if (dist < player.radius + enemy.radius) {
-            if (!player.isInvulnerable) {
-                player.lives--;
-                player.isInvulnerable = true;
-                player.invulnerableTimer = 60;
-                createExplosion(player.x, player.y, '#e74c3c');
-                if (player.lives <= 0) endGame();
+        // Lógica de Animação da Porta
+        if (gameState === STATE_OPENING_DOOR) {
+            doorAnimationTimer--;
+            if (doorAnimationTimer <= 0) {
+                gameState = STATE_PLAYING;
+                player.hasKey = false;
+                openDoor();
             }
         }
 
-        if (player.isAttacking && dist < 60) {
-            const angleToEnemy = Math.atan2(enemy.y - player.y, enemy.x - player.x);
-            let playerAngle = 0;
-            if (player.direction === 0) playerAngle = Math.PI/2;
-            if (player.direction === 1) playerAngle = -Math.PI/2;
-            if (player.direction === 2) playerAngle = Math.PI;
-            if (player.direction === 3) playerAngle = 0;
+        // Desenhar Entidades
+        entities.forEach(entity => {
+            if (entity === player) player.draw();
+            else {
+                if (gameState === STATE_PLAYING) entity.update(player);
+                entity.draw();
+            }
+        });
 
-            const angleDiff = Math.abs(angleToEnemy - playerAngle);
+        // ITENS e PROJÉTEIS
+        if (gameState === STATE_PLAYING) {
+            // Itens
+            for (let i = items.length - 1; i >= 0; i--) {
+                const item = items[i];
+                item.draw();
+                
+                // Colisão Item
+                const dist = Math.hypot(player.x - item.x, player.y - item.y);
+                if (dist < player.radius + item.radius) {
+                    if (item.type === 'HEART') {
+                        if (player.lives < 3) {
+                            player.lives++;
+                            item.active = false;
+                            createExplosion(player.x, player.y, '#e74c3c');
+                        }
+                    } else if (item.type === 'KEY') {
+                        item.active = false;
+                        player.hasKey = true; // Pega a chave
+                        gameState = STATE_ITEM_GET;
+                        itemGetTimer = 180; 
+                        openSecretPath();
+                    }
+                }
+                if (!item.active) items.splice(i, 1);
+            }
+
+            // Projéteis
+            for (let i = projectiles.length - 1; i >= 0; i--) {
+                const p = projectiles[i];
+                p.update();
+                p.draw();
+                const dist = Math.hypot(p.x - player.x, p.y - player.y);
+                if (dist < p.radius + player.radius) {
+                    if (!player.isInvulnerable) {
+                        player.lives--;
+                        player.isInvulnerable = true;
+                        player.invulnerableTimer = 60;
+                        createExplosion(player.x, player.y, '#9b59b6');
+                        p.active = false;
+                        if (player.lives <= 0) endGame();
+                    }
+                }
+                if (!p.active) projectiles.splice(i, 1);
+            }
+        } else if (gameState === STATE_ITEM_GET) {
+            items.forEach(i => i.draw());
+            itemGetTimer--;
             
-            if (angleDiff < 1.5 || (player.direction === 2 && Math.abs(angleToEnemy) > 2)) {
-                 createExplosion(enemy.x, enemy.y, enemy.color);
-                 enemies.splice(i, 1);
-                 score += 100;
+            const itemX = player.x;
+            const itemY = player.y - 50;
+            ctx.save(); ctx.translate(itemX, itemY); ctx.rotate(globalFrame * 0.05);
+            for(let i=0; i<8; i++) { ctx.rotate(Math.PI/4); ctx.fillStyle = `rgba(255, 215, 0, ${0.5 + Math.sin(globalFrame*0.1)*0.3})`; ctx.fillRect(-2, 15, 4, 30); }
+            ctx.restore();
+            ctx.save(); ctx.translate(itemX, itemY); ctx.scale(2, 2); 
+            const c = '#f1c40f';
+            drawPixelRect(-6, -10, 12, 12, c); drawPixelRect(-2, -6, 4, 4, '#1a1a2e'); drawPixelRect(-2, 2, 4, 16, c); drawPixelRect(2, 10, 6, 4, c); drawPixelRect(2, 16, 4, 4, c);
+            ctx.restore();
+
+            if (itemGetTimer <= 0) {
+                gameState = STATE_PLAYING;
             }
         }
+
+        // Partículas
+        for (let i = particles.length - 1; i >= 0; i--) {
+            const p = particles[i];
+            p.update();
+            p.draw();
+            if (p.life <= 0) particles.splice(i, 1);
+        }
+
+        // Efeitos Atmosféricos
+        if (fogSystem) {
+            ctx.fillStyle = 'rgba(0, 5, 20, 0.45)'; 
+            ctx.fillRect(camera.x, camera.y, camera.width, camera.height);
+            fogSystem.update();
+            fogSystem.draw(ctx);
+        }
+
+        // Lógica de Combate
+        if (gameState === STATE_PLAYING) {
+            for (let i = enemies.length - 1; i >= 0; i--) {
+                const enemy = enemies[i];
+                const dist = Math.hypot(player.x - enemy.x, player.y - enemy.y);
+
+                if (dist < player.radius + enemy.radius) {
+                    if (!player.isInvulnerable) {
+                        player.lives--;
+                        player.isInvulnerable = true;
+                        player.invulnerableTimer = 60;
+                        createExplosion(player.x, player.y, '#e74c3c');
+                        if (player.lives <= 0) endGame();
+                    }
+                }
+
+                if (player.isAttacking && dist < (enemy.radius + 40)) {
+                    const angleToEnemy = Math.atan2(enemy.y - player.y, enemy.x - player.x);
+                    let playerAngle = 0;
+                    if (player.direction === 0) playerAngle = Math.PI/2;
+                    if (player.direction === 1) playerAngle = -Math.PI/2;
+                    if (player.direction === 2) playerAngle = Math.PI;
+                    if (player.direction === 3) playerAngle = 0;
+
+                    const angleDiff = Math.abs(angleToEnemy - playerAngle);
+                    
+                    if (angleDiff < 1.5 || (player.direction === 2 && Math.abs(angleToEnemy) > 2)) {
+                        createExplosion(enemy.x, enemy.y, enemy.color);
+                        enemy.takeDamage();
+                        if (!enemy.active) {
+                            enemies.splice(i, 1);
+                            score += (enemy.type === 'BOSS' ? 1000 : 100);
+                            if (enemy.type !== 'BOSS' && Math.random() < 0.20) items.push(new HeartItem(enemy.x, enemy.y));
+                        }
+                    }
+                }
+            }
+        }
+
+        ctx.restore(); 
+
+        // UI do Jogo
+        if (gameState === STATE_PLAYING || gameState === STATE_ITEM_GET || gameState === STATE_OPENING_DOOR) {
+            // Corações
+            for (let i = 0; i < player.lives; i++) {
+                const x = 30 + (i * 35); const y = 30;
+                ctx.fillStyle = '#e74c3c';
+                drawPixelRect(x + 5, y, 5, 5, '#e74c3c'); drawPixelRect(x + 15, y, 5, 5, '#e74c3c'); drawPixelRect(x, y + 5, 25, 5, '#e74c3c'); drawPixelRect(x + 5, y + 10, 15, 5, '#e74c3c'); drawPixelRect(x + 10, y + 15, 5, 5, '#e74c3c');
+            }
+            
+            // Score e Level
+            ctx.fillStyle = 'white'; ctx.font = '20px "Press Start 2P"'; ctx.textAlign = 'right'; ctx.fillText(`SCORE: ${score.toString().padStart(5, '0')}`, canvas.width - 30, 45);
+            ctx.font = '10px "Press Start 2P"'; ctx.textAlign = 'left'; ctx.fillStyle = 'rgba(255,255,255,0.5)'; ctx.fillText(currentLevel === 1 ? "Level 1: Floresta Fantasma" : "Level 2: O Castelo Abandonado", 20, canvas.height - 20);
+
+            // ÍCONE DA CHAVE NA GUI
+            if (player.hasKey) {
+                const keyX = canvas.width - 50;
+                const keyY = 80;
+                const c = '#f1c40f';
+                ctx.save();
+                ctx.translate(keyX, keyY);
+                ctx.scale(1.5, 1.5);
+                drawPixelRect(-6, -10, 12, 12, c); drawPixelRect(-2, -6, 4, 4, '#1a1a2e');
+                drawPixelRect(-2, 2, 4, 16, c); drawPixelRect(2, 10, 6, 4, c); drawPixelRect(2, 16, 4, 4, c);
+                ctx.restore();
+            }
+        }
+        
+        if (gameState === STATE_GAMEOVER) {
+             ctx.fillStyle = 'rgba(0,0,0,0.7)'; ctx.fillRect(0, 0, canvas.width, canvas.height);
+             ctx.fillStyle = '#e74c3c'; ctx.font = '50px "Press Start 2P"'; ctx.textAlign = 'center'; ctx.fillText("GAME OVER", canvas.width/2, canvas.height/2 - 20);
+             ctx.fillStyle = '#ffffff'; ctx.font = '20px "Press Start 2P"'; ctx.fillText("Pressione ESPAÇO para reiniciar", canvas.width/2, canvas.height/2 + 30);
+        }
     }
-
-    ctx.restore(); 
-    // === FIM DO MUNDO DO JOGO ===
-
-    drawUI();
 }
 
 function endGame() {
-    isGameOver = true;
-    uiElement.style.display = 'block';
+    gameState = STATE_GAMEOVER;
 }
 
 // Controles
@@ -781,9 +967,8 @@ window.addEventListener('keydown', e => {
     if (e.key === 's') keys.s = true;
     if (e.key === 'd') keys.d = true;
     if (e.key === ' ') {
-        if (isGameOver) {
-            init();
-            animate();
+        if (gameState === STATE_GAMEOVER) {
+            initLevel(1);
         }
     }
 });
@@ -796,13 +981,18 @@ window.addEventListener('keyup', e => {
 });
 
 window.addEventListener('mousemove', e => {
-    // Calcula posição do mouse relativa ao mundo (considerando a câmera)
     mouse.mapX = e.clientX + camera.x;
     mouse.mapY = e.clientY + camera.y;
+    mouse.x = e.clientX;
+    mouse.y = e.clientY;
 });
 
 window.addEventListener('mousedown', () => {
-    if (!isGameOver) player.attack();
+    if (gameState === STATE_MENU) {
+        initLevel(1); 
+    } else if (gameState === STATE_PLAYING) {
+        player.attack();
+    }
 });
 
 window.addEventListener('resize', () => {
@@ -812,7 +1002,7 @@ window.addEventListener('resize', () => {
     camera.height = canvas.height;
 });
 
-init();
+initMenu();
 animate();
 
 </script>
